@@ -2,7 +2,7 @@ import random
 import unittest
 from unittest.mock import patch
 
-from ship_captain_crew import keep_score_dice, play_round
+from ship_captain_crew import keep_score_dice, play_human_round, play_round
 
 
 class TestShipCaptainCrew(unittest.TestCase):
@@ -26,6 +26,23 @@ class TestShipCaptainCrew(unittest.TestCase):
         mock_randint.side_effect = [6, 5, 4, 6, 1, 1, 3]
         score = play_round()
         self.assertEqual(score, 9)
+
+    @patch("ship_captain_crew.prompt_keep_indices")
+    @patch("ship_captain_crew.roll_dice")
+    def test_human_turn_uses_all_three_tosses_after_required_set(self, mock_roll_dice, mock_prompt_keep_indices):
+        mock_roll_dice.side_effect = [
+            [4, 4, 6, 5, 6],
+            [1, 2],
+            [3, 4],
+        ]
+        mock_prompt_keep_indices.side_effect = [
+            [0, 2, 3],
+            [1, 2],
+            [0, 1, 2],
+        ]
+
+        score = play_human_round("Player 1")
+        self.assertEqual(score, 0)
 
 
 if __name__ == "__main__":

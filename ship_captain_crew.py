@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 REQUIRED_SEQUENCE = [("ship", 6), ("captain", 5), ("crew", 4)]
+REQUIRED_VALUES = {value for _, value in REQUIRED_SEQUENCE}
 SCORE_KEEP_THRESHOLD = 4
 
 
@@ -29,50 +30,151 @@ def keep_score_dice(dice: List[int]) -> Tuple[List[int], int]:
     return kept, reroll_count
 
 
+def prompt_keep_indices(dice: List[int]) -> List[int]:
+    print("Dice:", " ".join(f"[{index + 1}:{die}]" for index, die in enumerate(dice)))
+    raw = input("Enter dice positions to keep (1-based, comma or space separated; press enter to stop the round): ").strip()
+
+    if not raw:
+        return []
+
+    normalized = raw.replace(",", " ")
+    positions: List[int] = []
+    for token in normalized.split():
+        try:
+            position = int(token)
+        except ValueError:
+            raise ValueError("Keep positions must be whole numbers.")
+
+        if position < 1 or position > len(dice):
+            raise ValueError("Keep positions must be between 1 and the number of dice in the roll.")
+
+        positions.append(position - 1)
+
+    return sorted(set(positions))
+
+
+def next_required_value(acquired: Dict[str, int]) -> Optional[int]:
+    for name, value in REQUIRED_SEQUENCE:
+        if name not in acquired:
+            return value
+    return None
+
+
+def validate_keep_positions(current_dice: List[int], acquired: Dict[str, int], keep_positions: List[int]) -> List[int]:
+    if not keep_positions:
+        return []
+
+    required_value = next_required_value(acquired)
+    if required_value is None:
+        return keep_positions
+
+    selected_values = [current_dice[index] for index in keep_positions]
+    if required_value not in selected_values:
+        raise ValueError(f"You must keep the next required die: {required_value}.")
+
+    return keep_positions
+
+
+def score_after_required(acquired: Dict[str, int], kept_dice: List[int]) -> int:
+    if len(acquired) < len(REQUIRED_SEQUENCE):
+        return 0
+
+    required_used = set(acquired.values())
+    return sum(die for die in kept_dice if die not in required_used)
+
+
 def play_round() -> int:
     acquired: Dict[str, int] = {}
-    score_keep: List[int] = []
+    kept_dice: List[int] = []
     dice_to_roll = 5
 
-    for roll_number in range(1, 4):
-        if len(acquired) < len(REQUIRED_SEQUENCE):
-            dice = roll_dice(dice_to_roll)
-            newly_acquired, remaining = find_required_dice(dice, acquired)
-            acquired.update(newly_acquired)
+    for _ in range(3):
+        dice = roll_dice(dice_to_roll)
+        current_dice = kept_dice + dice
+        newly_acquired, remaining = find_required_dice(current_dice, acquired)
+        acquired.update(newly_acquired)
 
-            if len(acquired) == len(REQUIRED_SEQUENCE):
-                score_keep = remaining
-                dice_to_roll = len(score_keep)
-            else:
-                dice_to_roll = len(remaining)
-        else:
-            kept, reroll_count = keep_score_dice(score_keep)
-            score_keep = kept + roll_dice(reroll_count)
-            dice_to_roll = reroll_count
+        if len(acquired) == len(REQUIRED_SEQUENCE):
+            score = score_after_required(acquired, current_dice)
+            return score
 
-    if len(acquired) == len(REQUIRED_SEQUENCE):
-        return sum(score_keep)
+        kept_dice = remaining
+        dice_to_roll = len(kept_dice)
 
     return 0
 
 
-def play_game(rounds: int = 12) -> Tuple[int, List[int]]:
-    scores: List[int] = []
+def play_human_round(player_name: str) -> int:
+    acquired: Dict[str, int] = {}
+    kept_dice: List[int] = []
 
+    print(f"\n{player_name}'s turn")
+    print("Rule: keep a 6 first, then a 5, then a 4 to complete Ship, Captain, Crew.")
+
+    for toss in range(1, 4):
+        roll_count = 5 - len(kept_dice)
+        print(f"\nHeld dice: {kept_dice}")
+        print(f"Rolling {roll_count} new dice...")
+        current_dice = roll_dice(roll_count)
+        print(f"Toss {toss}: {current_dice}")
+
+        try:
+            keep_positions = prompt_keep_indices(current_dice)
+            keep_positions = validate_keep_positions(current_dice, acquired, keep_positions)
+        except ValueError as exc:
+            print(f"Invalid input: {exc}")
+            print("Please try again.")
+            return 0
+
+        if not keep_positions:
+            print(f"{player_name} stopped the round.")
+            break
+
+        selected_values = [current_dice[index] for index in keep_positions]
+        kept_dice.extend(selected_values)
+
+        for name, value in REQUIRED_SEQUENCE:
+            if name not in acquired and value in selected_values:
+                acquired[name] = value
+
+        if len(acquired) == len(REQUIRED_SEQUENCE):
+            cargo_score = sum(die for die in kept_dice if die not in REQUIRED_VALUES)
+            print(f"{player_name} reached Ship, Captain, Crew. Cargo score: {cargo_score}")
+            return cargo_score
+
+        missing = [name for name, _ in REQUIRED_SEQUENCE if name not in acquired]
+        print(f"{player_name} still needs: {', '.join(missing)}")
+
+    if len(acquired) != len(REQUIRED_SEQUENCE):
+        print(f"{player_name} did not complete the set and gets 0 this round.")
+        return 0
+
+    return sum(die for die in kept_dice if die not in REQUIRED_VALUES)
+
+
+def play_game(rounds: int = 10, player_names: Optional[List[str]] = None) -> Dict[str, int]:
+    if player_names is None:
+        player_names = ["Player 1"]
+
+    total_scores: Dict[str, int] = {name: 0 for name in player_names}
     for round_number in range(1, rounds + 1):
-        round_score = play_round()
-        scores.append(round_score)
-        print(f"Round {round_number:2}: {round_score} points")
+        print(f"\n=== Round {round_number} ===")
+        for player_name in player_names:
+            round_score = play_human_round(player_name)
+            total_scores[player_name] += round_score
+            print(f"{player_name} now has {total_scores[player_name]} total points.")
 
-    total_score = sum(scores)
-    print("\nFinal score after", rounds, "rounds:", total_score)
-    print("Average score per round:", f"{total_score / rounds:.2f}")
-    return total_score, scores
+    print("\nFinal scores:")
+    for player_name, score in total_scores.items():
+        print(f"- {player_name}: {score}")
+
+    return total_scores
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Play Ship, Captain, Crew (Cargo) with 5 dice and 3 tosses.")
     parser.add_argument("--rounds", type=int, default=12, help="Number of rounds to play.")
+    parser.add_argument("--players", type=int, default=None, help="Number of players in the game.")
     parser.add_argument("--seed", type=int, help="Optional random seed for reproducible games.")
     return parser.parse_args()
 
@@ -82,12 +184,24 @@ def main() -> None:
     if args.seed is not None:
         random.seed(args.seed)
 
-    print("Ship, Captain, Crew (Cargo)")
-    print("Each round you get 3 tosses to roll a 6 (ship), 5 (captain), and 4 (crew). The remaining dice are your score.")
-    print("If you fail to get ship/captain/crew, the round scores 0.")
-    print("\nPlaying", args.rounds, "rounds...")
+    if args.players is None:
+        while True:
+            try:
+                raw_players = input("How many players? ").strip()
+                args.players = int(raw_players)
+                if args.players > 0:
+                    break
+                print("Please enter a positive whole number of players.")
+            except ValueError:
+                print("Please enter a whole number for the player count.")
 
-    play_game(args.rounds)
+    print("Ship, Captain, Crew (Cargo)")
+    print("Each round you get 3 tosses to roll a 6 (ship), 5 (captain), and 4 (crew).")
+    print("After you have all three, the remaining dice become your score.")
+    print("Choose which dice to keep by entering their 1-based positions after each toss.")
+
+    player_names = [f"Player {index}" for index in range(1, args.players + 1)]
+    play_game(args.rounds, player_names)
 
 
 if __name__ == "__main__":
