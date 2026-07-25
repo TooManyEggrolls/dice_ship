@@ -44,6 +44,15 @@ class TestShipCaptainCrew(unittest.TestCase):
         score = play_human_round("Player 1")
         self.assertEqual(score, 0)
 
+    @patch("ship_captain_crew.prompt_keep_indices")
+    @patch("ship_captain_crew.roll_dice")
+    def test_human_turn_scores_remaining_dice_when_required_set_is_completed(self, mock_roll_dice, mock_prompt_keep_indices):
+        mock_roll_dice.side_effect = [[6, 5, 4, 2, 3]]
+        mock_prompt_keep_indices.side_effect = [[0, 1, 2]]
+
+        score = play_human_round("Player 1")
+        self.assertEqual(score, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import random
+from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 REQUIRED_SEQUENCE = [("ship", 6), ("captain", 5), ("crew", 4)]
@@ -85,35 +86,36 @@ def score_after_required(acquired: Dict[str, int], kept_dice: List[int]) -> int:
 
 def play_round() -> int:
     acquired: Dict[str, int] = {}
-    kept_dice: List[int] = []
     dice_to_roll = 5
 
     for _ in range(3):
         dice = roll_dice(dice_to_roll)
-        current_dice = kept_dice + dice
-        newly_acquired, remaining = find_required_dice(current_dice, acquired)
+        newly_acquired, remaining = find_required_dice(dice, acquired)
         acquired.update(newly_acquired)
 
         if len(acquired) == len(REQUIRED_SEQUENCE):
-            score = score_after_required(acquired, current_dice)
-            return score
+            return sum(remaining)
 
-        kept_dice = remaining
-        dice_to_roll = len(kept_dice)
+        dice_to_roll = len(remaining)
 
     return 0
 
 
 def play_human_round(player_name: str) -> int:
     acquired: Dict[str, int] = {}
-    kept_dice: List[int] = []
+    held_dice: List[int] = []
+    reroll_dice: List[int] = []
 
     print(f"\n{player_name}'s turn")
     print("Rule: keep a 6 first, then a 5, then a 4 to complete Ship, Captain, Crew.")
 
     for toss in range(1, 4):
-        roll_count = 5 - len(kept_dice)
-        print(f"\nHeld dice: {kept_dice}")
+        roll_count = len(reroll_dice) if reroll_dice else 5
+        if roll_count <= 0:
+            print("No dice remain to roll. Ending the turn.")
+            break
+
+        print(f"\nHeld dice: {held_dice}")
         print(f"Rolling {roll_count} new dice...")
         current_dice = roll_dice(roll_count)
         print(f"Toss {toss}: {current_dice}")
@@ -131,17 +133,19 @@ def play_human_round(player_name: str) -> int:
             break
 
         selected_values = [current_dice[index] for index in keep_positions]
-        kept_dice.extend(selected_values)
+        held_dice.extend(selected_values)
 
         for name, value in REQUIRED_SEQUENCE:
             if name not in acquired and value in selected_values:
                 acquired[name] = value
 
+        remaining_dice = [die for index, die in enumerate(current_dice) if index not in keep_positions]
         if len(acquired) == len(REQUIRED_SEQUENCE):
-            cargo_score = sum(die for die in kept_dice if die not in REQUIRED_VALUES)
+            cargo_score = sum(remaining_dice)
             print(f"{player_name} reached Ship, Captain, Crew. Cargo score: {cargo_score}")
             return cargo_score
 
+        reroll_dice = remaining_dice
         missing = [name for name, _ in REQUIRED_SEQUENCE if name not in acquired]
         print(f"{player_name} still needs: {', '.join(missing)}")
 
@@ -149,7 +153,7 @@ def play_human_round(player_name: str) -> int:
         print(f"{player_name} did not complete the set and gets 0 this round.")
         return 0
 
-    return sum(die for die in kept_dice if die not in REQUIRED_VALUES)
+    return sum(reroll_dice)
 
 
 def play_game(rounds: int = 10, player_names: Optional[List[str]] = None) -> Dict[str, int]:
