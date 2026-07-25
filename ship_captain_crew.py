@@ -33,7 +33,7 @@ def keep_score_dice(dice: List[int]) -> Tuple[List[int], int]:
 
 def prompt_keep_indices(dice: List[int]) -> List[int]:
     print("Dice:", " ".join(f"[{index + 1}:{die}]" for index, die in enumerate(dice)))
-    raw = input("Enter dice positions to keep (1-based, comma or space separated; press enter to stop the round): ").strip()
+    raw = input("Enter dice positions to keep (1-based, comma or space separated; press enter to keep none and continue): ").strip()
 
     if not raw:
         return []
@@ -101,16 +101,51 @@ def play_round() -> int:
     return 0
 
 
+def prompt_keep_or_reroll(player_name: str, cargo_score: int, remaining_rolls: int) -> bool:
+    if remaining_rolls <= 0:
+        return False
+
+    prompt = (
+        f"{player_name}, you have completed Ship, Captain, Crew. "
+        f"Current cargo score is {cargo_score}. "
+        f"Keep this score and end the turn? [y/n]: "
+    )
+    while True:
+        raw = input(prompt).strip().lower()
+        if raw in {"", "y", "yes"}:
+            return True
+        if raw in {"n", "no"}:
+            return False
+        print("Please enter 'y' to keep the current score or 'n' to reroll the cargo dice.")
+
+
 def play_human_round(player_name: str) -> int:
     acquired: Dict[str, int] = {}
     held_dice: List[int] = []
-    reroll_dice: List[int] = []
+    cargo_dice: List[int] = []
 
     print(f"\n{player_name}'s turn")
     print("Rule: keep a 6 first, then a 5, then a 4 to complete Ship, Captain, Crew.")
 
     for toss in range(1, 4):
-        roll_count = len(reroll_dice) if reroll_dice else 5
+        if len(acquired) == len(REQUIRED_SEQUENCE):
+            cargo_score = sum(cargo_dice)
+            if toss == 3:
+                print(f"{player_name} reached Ship, Captain, Crew. Cargo score: {cargo_score}")
+                return cargo_score
+
+            keep_current_score = prompt_keep_or_reroll(player_name, cargo_score, 4 - toss)
+            if keep_current_score:
+                print(f"{player_name} kept the current cargo score: {cargo_score}")
+                return cargo_score
+
+            print(f"{player_name} chose to reroll the cargo dice.")
+            current_dice = roll_dice(len(cargo_dice) or 5)
+            print(f"Toss {toss}: {current_dice}")
+            cargo_dice = current_dice
+            continue
+
+        roll_count = len(cargo_dice) if cargo_dice else 5
         if roll_count <= 0:
             print("No dice remain to roll. Ending the turn.")
             break
@@ -129,8 +164,9 @@ def play_human_round(player_name: str) -> int:
             return 0
 
         if not keep_positions:
-            print(f"{player_name} stopped the round.")
-            break
+            print(f"{player_name} kept no dice this roll and will continue.")
+            cargo_dice = current_dice
+            continue
 
         selected_values = [current_dice[index] for index in keep_positions]
         held_dice.extend(selected_values)
@@ -140,12 +176,20 @@ def play_human_round(player_name: str) -> int:
                 acquired[name] = value
 
         remaining_dice = [die for index, die in enumerate(current_dice) if index not in keep_positions]
+        cargo_dice = remaining_dice
+
         if len(acquired) == len(REQUIRED_SEQUENCE):
-            cargo_score = sum(remaining_dice)
+            cargo_score = sum(cargo_dice)
             print(f"{player_name} reached Ship, Captain, Crew. Cargo score: {cargo_score}")
+            if toss < 3:
+                keep_current_score = prompt_keep_or_reroll(player_name, cargo_score, 4 - toss)
+                if keep_current_score:
+                    print(f"{player_name} kept the current cargo score: {cargo_score}")
+                    return cargo_score
+                print(f"{player_name} chose to reroll the cargo dice.")
+                continue
             return cargo_score
 
-        reroll_dice = remaining_dice
         missing = [name for name, _ in REQUIRED_SEQUENCE if name not in acquired]
         print(f"{player_name} still needs: {', '.join(missing)}")
 
@@ -153,7 +197,7 @@ def play_human_round(player_name: str) -> int:
         print(f"{player_name} did not complete the set and gets 0 this round.")
         return 0
 
-    return sum(reroll_dice)
+    return sum(cargo_dice)
 
 
 def play_game(rounds: int = 10, player_names: Optional[List[str]] = None) -> Dict[str, int]:
