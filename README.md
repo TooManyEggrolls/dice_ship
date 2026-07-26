@@ -22,3 +22,23 @@ Use `--rounds` to change the number of rounds, and `--seed` to make results repr
 ```bash
 python3 ship_captain_crew.py --rounds 12 --seed 123
 ```
+
+You can also play with more than one player by passing `--players`.
+
+```bash
+python3 ship_captain_crew.py --players 2
+```
+
+## Run the tests
+
+The repository includes a small unittest suite for the core game logic.
+
+```bash
+python3 -m pytest -q
+```
+
+If you prefer to run the tests directly with the unittest module, you can also use:
+
+```bash
+python3 -m unittest -q test_ship_captain_crew.py
+```
