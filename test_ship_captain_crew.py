@@ -74,6 +74,18 @@ class TestShipCaptainCrew(unittest.TestCase):
         self.assertEqual(score, 0)
         self.assertEqual(mock_roll_dice.call_count, 3)
 
+    @patch("builtins.input", side_effect=["n", "y"])
+    @patch("ship_captain_crew.prompt_keep_indices")
+    @patch("ship_captain_crew.roll_dice")
+    def test_human_turn_rerolls_immediately_after_completing_required_set(self, mock_roll_dice, mock_prompt_keep_indices, mock_input):
+        mock_roll_dice.side_effect = [[6, 5, 4, 2, 3], [2, 2]]
+        mock_prompt_keep_indices.side_effect = [[0, 1, 2]]
+
+        score = play_human_round("Player 1")
+        self.assertEqual(score, 4)
+        self.assertEqual(mock_roll_dice.call_count, 2)
+        self.assertEqual(mock_input.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

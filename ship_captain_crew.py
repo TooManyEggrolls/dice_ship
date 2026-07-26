@@ -127,7 +127,8 @@ def play_human_round(player_name: str) -> int:
     print(f"\n{player_name}'s turn")
     print("Rule: keep a 6 first, then a 5, then a 4 to complete Ship, Captain, Crew.")
 
-    for toss in range(1, 4):
+    toss = 1
+    while toss <= 3:
         if len(acquired) == len(REQUIRED_SEQUENCE):
             cargo_score = sum(cargo_dice)
             if toss == 3:
@@ -140,6 +141,7 @@ def play_human_round(player_name: str) -> int:
                 return cargo_score
 
             print(f"{player_name} chose to reroll the cargo dice.")
+            toss += 1
             current_dice = roll_dice(len(cargo_dice) or 5)
             print(f"Toss {toss}: {current_dice}")
             cargo_dice = current_dice
@@ -166,6 +168,7 @@ def play_human_round(player_name: str) -> int:
         if not keep_positions:
             print(f"{player_name} kept no dice this roll and will continue.")
             cargo_dice = current_dice
+            toss += 1
             continue
 
         selected_values = [current_dice[index] for index in keep_positions]
@@ -187,11 +190,16 @@ def play_human_round(player_name: str) -> int:
                     print(f"{player_name} kept the current cargo score: {cargo_score}")
                     return cargo_score
                 print(f"{player_name} chose to reroll the cargo dice.")
+                toss += 1
+                current_dice = roll_dice(len(cargo_dice) or 5)
+                print(f"Toss {toss}: {current_dice}")
+                cargo_dice = current_dice
                 continue
             return cargo_score
 
         missing = [name for name, _ in REQUIRED_SEQUENCE if name not in acquired]
         print(f"{player_name} still needs: {', '.join(missing)}")
+        toss += 1
 
     if len(acquired) != len(REQUIRED_SEQUENCE):
         print(f"{player_name} did not complete the set and gets 0 this round.")
